@@ -1,72 +1,92 @@
 package ntnu.online.compiler.service;
 
+
 import org.springframework.stereotype.Service;
 
 import java.io.*;
 import java.util.Date;
-import java.util.List;
 
 @Service
 public class CompilerService {
-    BufferedReader br;
-    PrintWriter writer;
 
-    private static void createDockerFileJava(String className) throws FileNotFoundException {
-        String dokcerfileContent = "FROM openjdk:15\nCOPY ./src/ /tmp\nWORKDIR /tmp\nRUN javac "
-                + className + ".java\nENTRYPOINT [\"java\",\"" + className
-                + "\"]";
+    public String compiler(String inputCode) throws Exception{
+        String[] words = inputCode.split(" ");
 
-        //Creates Dockerfile
-        try (PrintWriter out = new PrintWriter( "Dockerfile")) {
-            out.println(dokcerfileContent);
-        }
-    }
-    public static StringBuilder compileAndRun(String code, String className) throws IOException, InterruptedException {
+        String className = words[2];
+
+        //Creates .java file
         try (PrintWriter out = new PrintWriter("src/" + className + ".java")) {
-            out.println(code);
+            out.println(inputCode);
         }
 
         createDockerFileJava(className);
-        System.out.println("dockerfile created");
+
         String imageName = "compile" + new Date().getTime();
 
         //Creates docker image
-        String[] dockerCommand = new String[] {"docker", "image", "build", "-t", imageName, " ."};
+        String[] dockerCommand = new String[] {"docker", "image", "build", "-t", imageName, "."};
         ProcessBuilder probuilder = new ProcessBuilder(dockerCommand);
-        Process commandline = probuilder.start();
-        commandline.waitFor();
-        System.out.println("image built");
+        Process process = probuilder.start();
+        process.waitFor();
 
-        Thread.sleep(5000);
+        //Creats docker container and runs
+        dockerCommand = new String[] {"docker", "container", "run", imageName};
+        probuilder = new ProcessBuilder(dockerCommand);
 
-        //Creates image and runs
-        ProcessBuilder rundocker = new ProcessBuilder("docker","container","run", imageName);
-        rundocker.redirectErrorStream(true);
-        rundocker.redirectError(ProcessBuilder.Redirect.INHERIT);
-        commandline = rundocker.start();
-        commandline.waitFor();
-        System.out.println("code running in docker");
-        StringBuilder sb = new StringBuilder();
+        probuilder.redirectErrorStream(true);
+        probuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
+        process = probuilder.start();
 
+        process.waitFor();
+
+        //Creates file with program output
+        StringBuilder stringBuilder = new StringBuilder();
+
+        //Prints output to terminal
         try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(commandline.getInputStream()));
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line = reader.readLine();
             while (line != null) {
-                sb.append(line);
-                System.out.println(line);
+                stringBuilder.append(line).append("\n");
                 line = reader.readLine();
             }
+            //Removes extra \n
+            stringBuilder.delete(stringBuilder.length()-1,stringBuilder.length());
         }
         catch (IOException exc) {
             exc.printStackTrace();
         }
-        System.out.println("deleting files");
-        //File javaFile = new File("src/" + className + ".java");
-        //javaFile.deleteOnExit();
-        //File dockerFile = new File ("Dockerfile");
-        //dockerFile.deleteOnExit();
 
-        return sb;
+        //Deletes the .java and docker file on exit
+        File javaFile = new File("src/" + className + ".java");
+        javaFile.deleteOnExit();
+        File dockerFile = new File ("Dockerfile");
+        dockerFile.deleteOnExit();
+
+        if(stringBuilder.toString().length()>255){
+            return "The Error is too long to display";
+        }
+
+        return stringBuilder.toString();
     }
 
+    public void createDockerFileJava(String className) throws FileNotFoundException {
+        String dokcerfileContent = "FROM openjdk:15\nCOPY ./src/ /tmp\nWORKDIR /tmp\nRUN javac "
+                + className + ".java\nENTRYPOINT [\"java\",\"" + className
+                + "\"]";
+
+        try (PrintWriter out = new PrintWriter( "Dockerfile")) {
+            out.println(dokcerfileContent);
+        }
+    }
+
+
+
+        /*
+        public class HelloWorld { public static void main(String[] args) {
+        System.out.println("Hello world!Goodbye world!Hello again!");
+                   }};
+                    */
 }
+
+
