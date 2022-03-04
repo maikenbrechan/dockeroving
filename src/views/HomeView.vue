@@ -26,9 +26,13 @@ export default {
     }
   },
   methods:{
-    sourceCode() {
-        //postservice.create(this.code)
-        this.output = this.code
+    sourceCode: async function() {
+        await postservice.create(this.code).then(function(response){
+          const result = response.data.output;
+          console.log(result)
+          this.output=String(result)
+          console.log(this.output)
+        }.bind(this))
     }
 }
 }
